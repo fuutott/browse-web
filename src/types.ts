@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const downloadLimit = Number.parseInt(process.env.DEFAULT_LIMIT ?? "5000") ?? 5000;
+export const downloadLimit = Number.parseInt(process.env.DEFAULT_LIMIT ?? "40000") ?? 40000;
 
 export const RequestPayloadSchema = z.object({
   url: z.string().url(),

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
+import express from "express";
+import cors from "cors";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -11,159 +14,211 @@ import { Fetcher } from "./Fetcher.js";
 import process from "process";
 import { downloadLimit } from "./types.js";
 
-const server = new Server(
-  {
-    name: "zcaceres/fetch",
-    version: "0.1.0",
-  },
-  {
-    capabilities: {
-      resources: {},
-      tools: {},
+// Create and configure the MCP server
+function createServer() {
+  const server = new Server(
+    {
+      name: "zcaceres/fetch",
+      version: "0.1.0",
     },
-  },
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "fetch_html",
-        description: "Fetch a website and return its unmodified contents as HTML",
-        inputSchema: {
-          type: "object",
-          properties: {
-            url: {
-              type: "string",
-              description: "URL of the website to fetch",
-            },
-            headers: {
-              type: "object",
-              description: "Optional headers to include in the request",
-            },
-            max_length: {
-              type: "number",
-              description: `Maximum number of characters to return (default: ${downloadLimit})`,
-            },
-            start_index: {
-              type: "number",
-              description: "Start content from this character index (default: 0)",
-            },
-          },
-          required: ["url"],
-        },
+    {
+      capabilities: {
+        resources: {},
+        tools: {},
       },
-      {
-        name: "fetch_markdown",
-        description: "Fetch a website and return its contents converted content to Markdown",
-        inputSchema: {
-          type: "object",
-          properties: {
-            url: {
-              type: "string",
-              description: "URL of the website to fetch",
+    },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return {
+      tools: [
+        {
+          name: "fetch_html",
+          description: "Fetch a website and return its unmodified contents as HTML. Secondary choice, returns larger payloads",
+          inputSchema: {
+            type: "object",
+            properties: {
+              url: {
+                type: "string",
+                description: "URL of the website to fetch",
+              },
+              headers: {
+                type: "object",
+                description: "Optional headers to include in the request",
+              },
+              max_length: {
+                type: "number",
+                description: `Maximum number of characters to return (default: ${downloadLimit})`,
+              },
+              start_index: {
+                type: "number",
+                description: "Start content from this character index (default: 0)",
+              },
             },
-            headers: {
-              type: "object",
-              description: "Optional headers to include in the request",
-            },
-            max_length: {
-              type: "number",
-              description: `Maximum number of characters to return (default: ${downloadLimit}})`,
-            },
-            start_index: {
-              type: "number",
-              description: "Start content from this character index (default: 0)",
-            },
+            required: ["url"],
           },
-          required: ["url"],
         },
-      },
-      {
-        name: "fetch_txt",
-        description:
-          "Fetch a website, convert the content to plain text (no HTML)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            url: {
-              type: "string",
-              description: "URL of the website to fetch",
+        {
+          name: "fetch_markdown",
+          description: "Fetch a website and return its contents converted content to Markdown, Primary choice for text-based content",
+          inputSchema: {
+            type: "object",
+            properties: {
+              url: {
+                type: "string",
+                description: "URL of the website to fetch",
+              },
+              headers: {
+                type: "object",
+                description: "Optional headers to include in the request",
+              },
+              max_length: {
+                type: "number",
+                description: `Maximum number of characters to return (default: ${downloadLimit})`,
+              },
+              start_index: {
+                type: "number",
+                description: "Start content from this character index (default: 0)",
+              },
             },
-            headers: {
-              type: "object",
-              description: "Optional headers to include in the request",
-            },
-            max_length: {
-              type: "number",
-              description: `Maximum number of characters to return (default: ${downloadLimit})`,
-            },
-            start_index: {
-              type: "number",
-              description: "Start content from this character index (default: 0)",
-            },
+            required: ["url"],
           },
-          required: ["url"],
         },
-      },
-      {
-        name: "fetch_json",
-        description: "Fetch a JSON file from a URL",
-        inputSchema: {
-          type: "object",
-          properties: {
-            url: {
-              type: "string",
-              description: "URL of the JSON to fetch",
-            },
-            headers: {
-              type: "object",
-              description: "Optional headers to include in the request",
-            },
-            max_length: {
-              type: "number",
-              description: `Maximum number of characters to return (default: ${downloadLimit})`,
-            },
-            start_index: {
-              type: "number",
-              description: "Start content from this character index (default: 0)",
-            },
-          },
-          required: ["url"],
-        },
-      },
-    ],
-  };
-});
+      ],
+    };
+  });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
 
-  const validatedArgs = RequestPayloadSchema.parse(args);
+    const validatedArgs = RequestPayloadSchema.parse(args);
 
-  if (request.params.name === "fetch_html") {
-    const fetchResult = await Fetcher.html(validatedArgs);
-    return fetchResult;
-  }
-  if (request.params.name === "fetch_json") {
-    const fetchResult = await Fetcher.json(validatedArgs);
-    return fetchResult;
-  }
-  if (request.params.name === "fetch_txt") {
-    const fetchResult = await Fetcher.txt(validatedArgs);
-    return fetchResult;
-  }
-  if (request.params.name === "fetch_markdown") {
-    const fetchResult = await Fetcher.markdown(validatedArgs);
-    return fetchResult;
-  }
-  throw new Error("Tool not found");
-});
+    if (request.params.name === "fetch_html") {
+      const fetchResult = await Fetcher.html(validatedArgs);
+      return fetchResult;
+    }
+    if (request.params.name === "fetch_markdown") {
+      const fetchResult = await Fetcher.markdown(validatedArgs);
+      return fetchResult;
+    }
+    throw new Error("Tool not found");
+  });
 
-async function main() {
+  return server;
+}
+
+// Start server with stdio transport
+async function startStdioServer() {
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.error("MCP Fetch Server (stdio) started");
 }
+
+// Start server with HTTP transport
+async function startHttpServer() {
+  const app = express();
+  app.use(express.json());
+
+  // Configure CORS to expose Mcp-Session-Id header for browser-based clients
+  app.use(
+    cors({
+      origin: "*", // Allow all origins - adjust as needed for production
+      exposedHeaders: ["Mcp-Session-Id"],
+    })
+  );
+
+  // Handle MCP requests
+  app.post("/mcp", async (req, res) => {
+    const server = createServer();
+    
+    try {
+      // Create a new transport for each request to prevent request ID collisions
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+
+      // Clean up transport when request closes
+      res.on("close", () => {
+        transport.close();
+        server.close();
+      });
+
+      // Connect server to transport
+      await server.connect(transport);
+      
+      // Handle the request
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      console.error("Error handling MCP request:", error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal server error",
+          },
+          id: null,
+        });
+      }
+    }
+  });
+
+  // Handle unsupported methods for /mcp endpoint
+  app.get("/mcp", async (req, res) => {
+    console.log("Received GET MCP request");
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Method not allowed. Use POST for MCP requests.",
+      },
+      id: null,
+    });
+  });
+
+  app.delete("/mcp", async (req, res) => {
+    console.log("Received DELETE MCP request");
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Method not allowed. Use POST for MCP requests.",
+      },
+      id: null,
+    });
+  });
+
+  // Start the HTTP server
+  const PORT = parseInt(process.env.PORT || "3037");
+  
+  app.listen(PORT, () => {
+    console.log(`MCP Fetch Server (HTTP) running on http://localhost:${PORT}/mcp`);
+    console.log(`Use this URL as the MCP server endpoint in your client configuration.`);
+  }).on("error", (error) => {
+    console.error("Server error:", error);
+    process.exit(1);
+  });
+}
+
+async function main() {
+  // Check command line arguments or environment variable to determine transport
+  const args = process.argv.slice(2);
+  const transportMode = args.includes("--http") || args.includes("-h") || process.env.MCP_TRANSPORT === "http" ? "http" : "stdio";
+
+  if (transportMode === "http") {
+    await startHttpServer();
+  } else {
+    await startStdioServer();
+  }
+}
+
+// Handle server shutdown
+process.on("SIGINT", async () => {
+  console.log("Shutting down MCP server...");
+  process.exit(0);
+});
 
 main().catch((error) => {
   console.error("Fatal error in main():", error);
