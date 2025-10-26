@@ -18,8 +18,8 @@ import { downloadLimit } from "./types.js";
 function createServer() {
   const server = new Server(
     {
-      name: "zcaceres/fetch",
-      version: "0.1.0",
+      name: "fetch-url",
+      version: "0.2.0",
     },
     {
       capabilities: {
@@ -33,8 +33,8 @@ function createServer() {
     return {
       tools: [
         {
-          name: "fetch_html",
-          description: "Fetch a website and return its unmodified contents as HTML. Secondary choice, returns larger payloads",
+          name: "fetch-url",
+          description: "Fetch a website and return its title, headings, links, and text content in structured format",
           inputSchema: {
             type: "object",
             properties: {
@@ -48,37 +48,22 @@ function createServer() {
               },
               max_length: {
                 type: "number",
-                description: `Maximum number of characters to return (default: ${downloadLimit})`,
+                description: `Maximum number of characters to return for content (default: ${downloadLimit})`,
               },
               start_index: {
                 type: "number",
                 description: "Start content from this character index (default: 0)",
               },
-            },
-            required: ["url"],
-          },
-        },
-        {
-          name: "fetch_markdown",
-          description: "Fetch a website and return its contents converted content to Markdown, Primary choice for text-based content",
-          inputSchema: {
-            type: "object",
-            properties: {
-              url: {
-                type: "string",
-                description: "URL of the website to fetch",
+              findInPage: {
+                type: "array",
+                items: {
+                  type: "string"
+                },
+                description: "Optional search terms to prioritize which links and content to return",
               },
-              headers: {
-                type: "object",
-                description: "Optional headers to include in the request",
-              },
-              max_length: {
+              maxLinks: {
                 type: "number",
-                description: `Maximum number of characters to return (default: ${downloadLimit})`,
-              },
-              start_index: {
-                type: "number",
-                description: "Start content from this character index (default: 0)",
+                description: "Maximum number of links to extract from the page (default: 40)",
               },
             },
             required: ["url"],
@@ -93,12 +78,8 @@ function createServer() {
 
     const validatedArgs = RequestPayloadSchema.parse(args);
 
-    if (request.params.name === "fetch_html") {
-      const fetchResult = await Fetcher.html(validatedArgs);
-      return fetchResult;
-    }
-    if (request.params.name === "fetch_markdown") {
-      const fetchResult = await Fetcher.markdown(validatedArgs);
+    if (request.params.name === "fetch-url") {
+      const fetchResult = await Fetcher.fetch(validatedArgs);
       return fetchResult;
     }
     throw new Error("Tool not found");

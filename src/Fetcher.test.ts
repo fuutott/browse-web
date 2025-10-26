@@ -1,12 +1,6 @@
 import { Fetcher } from "./Fetcher";
-import { JSDOM } from "jsdom";
-import TurndownService from "turndown";
 
 global.fetch = jest.fn();
-
-jest.mock("jsdom");
-
-jest.mock("turndown");
 
 describe("Fetcher", () => {
   beforeEach(() => {
@@ -32,16 +26,26 @@ describe("Fetcher", () => {
     </html>
   `;
 
-  describe("html", () => {
-    it("should return the raw HTML content", async () => {
+  describe("fetch", () => {
+    it("should extract structured data from HTML", async () => {
       (fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         text: jest.fn().mockResolvedValueOnce(mockHtml),
       });
 
-      const result = await Fetcher.html(mockRequest);
+      const result = await Fetcher.fetch(mockRequest);
+      
+      const expectedResult = {
+        url: "https://example.com",
+        title: "Test Page",
+        h1: "Hello World",
+        h2: "",
+        h3: "",
+        content: "Hello World This is a test paragraph."
+      };
+      
       expect(result).toEqual({
-        content: [{ type: "text", text: mockHtml }],
+        content: [{ type: "text", text: JSON.stringify(expectedResult, null, 2) }],
         isError: false,
       });
     });
@@ -49,7 +53,7 @@ describe("Fetcher", () => {
     it("should handle errors", async () => {
       (fetch as jest.Mock).mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await Fetcher.html(mockRequest);
+      const result = await Fetcher.fetch(mockRequest);
       expect(result).toEqual({
         content: [
           {
@@ -62,38 +66,24 @@ describe("Fetcher", () => {
     });
   });
 
-  describe("markdown", () => {
-    it("should convert HTML to markdown", async () => {
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        text: jest.fn().mockResolvedValueOnce(mockHtml),
-      });
+  describe("markdown (backward compatibility)", () => {
+    it("should work the same as fetch", async () => {
+      const mockFetch = jest.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          text: jest.fn().mockResolvedValueOnce(mockHtml),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: jest.fn().mockResolvedValueOnce(mockHtml),
+        });
+      
+      (fetch as jest.Mock) = mockFetch;
 
-      const mockMarkdown = "# Hello World\n\nThis is a test paragraph.";
-      (TurndownService as jest.Mock).mockImplementationOnce(() => ({
-        turndown: jest.fn().mockReturnValueOnce(mockMarkdown),
-      }));
-
-      const result = await Fetcher.markdown(mockRequest);
-      expect(result).toEqual({
-        content: [{ type: "text", text: mockMarkdown }],
-        isError: false,
-      });
-    });
-
-    it("should handle errors", async () => {
-      (fetch as jest.Mock).mockRejectedValueOnce(new Error("Conversion error"));
-
-      const result = await Fetcher.markdown(mockRequest);
-      expect(result).toEqual({
-        content: [
-          {
-            type: "text",
-            text: "Failed to fetch https://example.com: Conversion error",
-          },
-        ],
-        isError: true,
-      });
+      const fetchResult = await Fetcher.fetch(mockRequest);
+      const markdownResult = await Fetcher.markdown(mockRequest);
+      
+      expect(fetchResult).toEqual(markdownResult);
     });
   });
 
@@ -104,7 +94,7 @@ describe("Fetcher", () => {
         status: 404,
       });
 
-      const result = await Fetcher.html(mockRequest);
+      const result = await Fetcher.fetch(mockRequest);
       expect(result).toEqual({
         content: [
           {
@@ -119,7 +109,7 @@ describe("Fetcher", () => {
     it("should handle unknown errors", async () => {
       (fetch as jest.Mock).mockRejectedValueOnce("Unknown error");
 
-      const result = await Fetcher.html(mockRequest);
+      const result = await Fetcher.fetch(mockRequest);
       expect(result).toEqual({
         content: [
           {
